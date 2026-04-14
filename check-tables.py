@@ -1,9 +1,15 @@
+# -*- coding: utf-8 -*-
+
+
 import subprocess
 import re
 import socket
 import base64
 from datetime import datetime, timedelta
-from urllib.parse import urlparse
+try:
+    from urllib.parse import urlparse
+except ImportError:
+    from urlparse import urlparse
 
 def check_atomfeed_tables(openmrs_url="http://localhost/openmrs", username="admin", password="admin"):
     """
