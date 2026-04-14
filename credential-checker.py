@@ -308,8 +308,12 @@ def test_credentials_with_curl(credentials):
             feed_url
         ]
         
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
-        result["response_code"] = int(proc.stdout.strip()) if proc.stdout.strip().isdigit() else None
+        try:
+            proc_output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, universal_newlines=True)
+        except subprocess.CalledProcessError as e:
+            proc_output = e.output
+
+        result["response_code"] = int(proc_output.strip()) if proc_output.strip().isdigit() else None
         
         if result["response_code"] == 200:
             result["success"] = True
@@ -319,7 +323,6 @@ def test_credentials_with_curl(credentials):
             result["error"] = "HTTP {}".format(result['response_code'])
         else:
             result["error"] = "Failed to connect"
-            
     except subprocess.TimeoutExpired:
         result["error"] = "Request timeout"
     except Exception as e:

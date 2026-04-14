@@ -11,6 +11,17 @@ try:
 except ImportError:
     from urlparse import urlparse
 
+
+def _run_command(cmd, shell=False):
+    try:
+        output = subprocess.check_output(cmd, shell=shell, stderr=subprocess.STDOUT, universal_newlines=True)
+        return 0, output
+    except subprocess.CalledProcessError as e:
+        return e.returncode, e.output
+    except Exception:
+        return 1, ""
+
+
 def check_atomfeed_tables(openmrs_url="http://localhost/openmrs", username="admin", password="admin"):
     """
     Check atomfeed tables and verify if events point to real entities.
@@ -64,22 +75,23 @@ def _check_event_records(db_user, db_pass):
     
     try:
         # Get total count
+        # Get total count
         total_cmd = 'mysql -u{} -p{} atomfeed -sN -e "SELECT COUNT(*) FROM event_records"'.format(db_user, db_pass)
-        total_proc = subprocess.run(total_cmd, shell=True, capture_output=True, text=True, timeout=10)
-        if total_proc.returncode == 0:
-            result["count"] = int(total_proc.stdout.strip())
+        total_return, total_output = _run_command(total_cmd, shell=True)
+        if total_return == 0:
+            result["count"] = int(total_output.strip())
         
         # Get unprocessed events (events not yet consumed)
-        unprocessed_cmd = 'mysql -u{} -p{} atomfeed -sN -e "SELECT COUNT(*) FROM event_records WHERE event_status = \'.format(db_user, db_pass)PENDING\'"'
-        unprocessed_proc = subprocess.run(unprocessed_cmd, shell=True, capture_output=True, text=True, timeout=10)
-        if unprocessed_proc.returncode == 0:
-            result["unprocessed_count"] = int(unprocessed_proc.stdout.strip())
+        unprocessed_cmd = "mysql -u{} -p{} atomfeed -sN -e \"SELECT COUNT(*) FROM event_records WHERE event_status = 'PENDING'\"".format(db_user, db_pass)
+        unprocessed_return, unprocessed_output = _run_command(unprocessed_cmd, shell=True)
+        if unprocessed_return == 0:
+            result["unprocessed_count"] = int(unprocessed_output.strip())
         
         # Get oldest unprocessed event
-        oldest_cmd = 'mysql -u{} -p{} atomfeed -sN -e "SELECT MIN(time_created) FROM event_records WHERE event_status = \'.format(db_user, db_pass)PENDING\'"'
-        oldest_proc = subprocess.run(oldest_cmd, shell=True, capture_output=True, text=True, timeout=10)
-        if oldest_proc.returncode == 0 and oldest_proc.stdout.strip():
-            result["oldest_unprocessed"] = oldest_proc.stdout.strip()
+        oldest_cmd = "mysql -u{} -p{} atomfeed -sN -e \"SELECT MIN(time_created) FROM event_records WHERE event_status = 'PENDING'\"".format(db_user, db_pass)
+        oldest_return, oldest_output = _run_command(oldest_cmd, shell=True)
+        if oldest_return == 0 and oldest_output.strip():
+            result["oldest_unprocessed"] = oldest_output.strip()
             
             # Check if there are very old unprocessed events (> 1 hour)
             oldest_time = datetime.fromisoformat(result["oldest_unprocessed"].replace(' ', 'T'))
@@ -88,9 +100,9 @@ def _check_event_records(db_user, db_pass):
         
         # Check for duplicate UUIDs
         dup_cmd = 'mysql -u{} -p{} atomfeed -sN -e "SELECT uuid, COUNT(*) FROM event_records GROUP BY uuid HAVING COUNT(*) > 1 LIMIT 5"'.format(db_user, db_pass)
-        dup_proc = subprocess.run(dup_cmd, shell=True, capture_output=True, text=True, timeout=10)
-        if dup_proc.returncode == 0 and dup_proc.stdout.strip():
-            duplicates = dup_proc.stdout.strip().split('\n')
+        dup_return, dup_output = _run_command(dup_cmd, shell=True)
+        if dup_return == 0 and dup_output.strip():
+            duplicates = dup_output.strip().split('\n')
             result["issues"].append("Found {} duplicate UUIDs in event_records".format(len(duplicates)))
         
     except Exception as e:
@@ -108,10 +120,10 @@ def _check_markers(db_user, db_pass):
     
     try:
         cmd = 'mysql -u{} -p{} atomfeed -sN -e "SELECT feed_uri, last_read_entry_id, last_read_entry_time FROM markers"'.format(db_user, db_pass)
-        proc = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=10)
+        proc_return, proc_output = _run_command(cmd, shell=True)
         
-        if proc.returncode == 0 and proc.stdout.strip():
-            for line in proc.stdout.strip().split('\n'):
+        if proc_return == 0 and proc_output.strip():
+            for line in proc_output.strip().split('\n'):
                 parts = line.split('\t')
                 if len(parts) >= 3:
                     marker = {
@@ -148,11 +160,11 @@ def _check_offset_marker(db_user, db_pass):
     
     try:
         cmd = 'mysql -u{} -p{} atomfeed -sN -e "SELECT * FROM event_records_offset_marker LIMIT 1"'.format(db_user, db_pass)
-        proc = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=10)
+        proc_return, proc_output = _run_command(cmd, shell=True)
         
-        if proc.returncode == 0 and proc.stdout.strip():
+        if proc_return == 0 and proc_output.strip():
             result["has_offset_marker"] = True
-            result["offset_value"] = proc.stdout.strip()
+            result["offset_value"] = proc_output.strip()
         else:
             result["issues"].append("No offset marker found - may cause duplicate processing")
             
@@ -174,22 +186,22 @@ def _check_failed_events(db_user, db_pass):
     try:
         # Get total count
         count_cmd = 'mysql -u{} -p{} atomfeed -sN -e "SELECT COUNT(*) FROM failed_events"'.format(db_user, db_pass)
-        count_proc = subprocess.run(count_cmd, shell=True, capture_output=True, text=True, timeout=10)
-        if count_proc.returncode == 0:
-            result["count"] = int(count_proc.stdout.strip())
+        count_return, count_output = _run_command(count_cmd, shell=True)
+        if count_return == 0:
+            result["count"] = int(count_output.strip())
         
         if result["count"] > 0:
             # Get oldest failure
             oldest_cmd = 'mysql -u{} -p{} atomfeed -sN -e "SELECT MIN(time_created) FROM failed_events"'.format(db_user, db_pass)
-            oldest_proc = subprocess.run(oldest_cmd, shell=True, capture_output=True, text=True, timeout=10)
-            if oldest_proc.returncode == 0 and oldest_proc.stdout.strip():
-                result["oldest_failure"] = oldest_proc.stdout.strip()
+            oldest_return, oldest_output = _run_command(oldest_cmd, shell=True)
+            if oldest_return == 0 and oldest_output.strip():
+                result["oldest_failure"] = oldest_output.strip()
             
             # Get recent failures (last 10)
             recent_cmd = 'mysql -u{} -p{} atomfeed -sN -e "SELECT id, uuid, title, error_message, time_created FROM failed_events ORDER BY time_created DESC LIMIT 10"'.format(db_user, db_pass)
-            recent_proc = subprocess.run(recent_cmd, shell=True, capture_output=True, text=True, timeout=10)
-            if recent_proc.returncode == 0 and recent_proc.stdout.strip():
-                for line in recent_proc.stdout.strip().split('\n'):
+            recent_return, recent_output = _run_command(recent_cmd, shell=True)
+            if recent_return == 0 and recent_output.strip():
+                for line in recent_output.strip().split('\n'):
                     parts = line.split('\t')
                     if len(parts) >= 5:
                         result["recent_failures"].append({
@@ -220,10 +232,10 @@ def _verify_entities(db_user, db_pass, openmrs_url):
     
     try:
         # Get recent unprocessed events to check
-        cmd = 'mysql -u{} -p{} atomfeed -sN -e "SELECT id, uuid, title, url, content FROM event_records WHERE event_status = \'.format(db_user, db_pass)PENDING\' LIMIT 20"'
-        proc = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=10)
+        cmd = "mysql -u{} -p{} atomfeed -sN -e \"SELECT id, uuid, title, url, content FROM event_records WHERE event_status = 'PENDING' LIMIT 20\"".format(db_user, db_pass)
+        proc_return, proc_output = _run_command(cmd, shell=True)
         
-        if proc.returncode == 0 and proc.stdout.strip():
+        if proc_return == 0 and proc_output.strip():
             for line in proc.stdout.strip().split('\n'):
                 parts = line.split('\t')
                 if len(parts) >= 5:
@@ -252,10 +264,10 @@ def _verify_entities(db_user, db_pass, openmrs_url):
         
         # Also check failed events
         failed_cmd = 'mysql -u{} -p{} atomfeed -sN -e "SELECT id, uuid, title, url, content FROM failed_events LIMIT 10"'.format(db_user, db_pass)
-        failed_proc = subprocess.run(failed_cmd, shell=True, capture_output=True, text=True, timeout=10)
+        failed_return, failed_output = _run_command(failed_cmd, shell=True)
         
-        if failed_proc.returncode == 0 and failed_proc.stdout.strip():
-            for line in failed_proc.stdout.strip().split('\n'):
+        if failed_return == 0 and failed_output.strip():
+            for line in failed_output.strip().split('\n'):
                 parts = line.split('\t')
                 if len(parts) >= 5:
                     event_id = parts[0]

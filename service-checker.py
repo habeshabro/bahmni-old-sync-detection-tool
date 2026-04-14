@@ -121,13 +121,12 @@ def _get_service_details(service_name):
     
     # Check memory usage
     try:
-        result = subprocess.run(
+        proc_output = subprocess.check_output(
             ["ps", "aux"],
-            capture_output=True,
-            text=True,
-            timeout=5
+            stderr=subprocess.STDOUT,
+            universal_newlines=True
         )
-        for line in result.stdout.split('\n'):
+        for line in proc_output.split('\n'):
             if service_name in line.lower():
                 parts = line.split()
                 if len(parts) > 5:
@@ -183,18 +182,16 @@ def _check_sync_endpoints():
     # Check marker tables via MySQL
     try:
         # Use mysql command line to check failed events
-        result = subprocess.run(
+        proc_output = subprocess.check_output(
             ["mysql", "-u", "openmrs", "-e", "SELECT COUNT(*) FROM atomfeed.failed_events"],
-            capture_output=True,
-            text=True,
-            timeout=5
+            stderr=subprocess.STDOUT,
+            universal_newlines=True
         )
-        if result.returncode == 0:
-            count = result.stdout.strip().split('\n')[-1]
-            results["failed_events_count"] = int(count) if count.isdigit() else 0
-            results["has_failed_events"] = results["failed_events_count"] > 0
-        else:
-            results["has_failed_events"] = None
+        count = proc_output.strip().split('\n')[-1]
+        results["failed_events_count"] = int(count) if count.isdigit() else 0
+        results["has_failed_events"] = results["failed_events_count"] > 0
+    except subprocess.CalledProcessError:
+        results["has_failed_events"] = None
     except:
         results["has_failed_events"] = None
     
