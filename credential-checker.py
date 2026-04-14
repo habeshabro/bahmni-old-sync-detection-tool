@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+
+
 import os
 import re
 import subprocess
@@ -29,7 +32,6 @@ def test_atomfeed_credentials():
     
     # 2. Check Bahmni atomfeed client config
     atomfeed_configs = [
-        "/etc/bahmni/atomfeed/atomfeed.properties",
         "/var/lib/bahmni/atomfeed/atomfeed.properties",
         "/opt/bahmni/atomfeed/conf/atomfeed.properties"
     ]
@@ -38,6 +40,14 @@ def test_atomfeed_credentials():
         if os.path.exists(config):
             credential_sources.append(("atomfeed_config", config))
     
+    lab_configs = [
+        "/etc/bahmni-lab/atomfeed.properties"
+    ]
+
+    for config in lab_configs:
+        if os.path.exists(config):
+            credential_sources.append(("lab_config", config))
+
     # 3. Check ERP connect config
     erp_configs = [
         "/etc/bahmni-erp-connect/bahmni-erp-connect.conf",
@@ -58,6 +68,7 @@ def test_atomfeed_credentials():
         if os.path.exists(service_file):
             credential_sources.append(("systemd_service", service_file))
     
+    print("credential sources", credential_sources)
     # Extract and test credentials from each source
     for source_type, source_path in credential_sources:
         credentials = _extract_credentials(source_type, source_path)
@@ -99,7 +110,7 @@ def _extract_credentials(source_type, source_path):
                 url_match = re.search(r'connection\.url\s*=\s*([^\s]+)', content)
                 user_match = re.search(r'connection\.username\s*=\s*([^\s]+)', content)
                 pass_match = re.search(r'connection\.password\s*=\s*([^\s]+)', content)
-                
+                print(url_match)
                 if url_match:
                     credentials["url"] = url_match.group(1)
                 if user_match:
@@ -109,7 +120,7 @@ def _extract_credentials(source_type, source_path):
                 
                 # Also check for atomfeed specific
                 if not credentials:
-                    feed_url_match = re.search(r'atomfeed\.url\s*=\s*([^\s]+)', content)
+                    feed_url_match = re.search(r'at"omfeed\.url\s*=\s*([^\s]+)', content)
                     feed_user_match = re.search(r'atomfeed\.username\s*=\s*([^\s]+)', content)
                     feed_pass_match = re.search(r'atomfeed\.password\s*=\s*([^\s]+)', content)
                     
@@ -119,6 +130,23 @@ def _extract_credentials(source_type, source_path):
                         credentials["username"] = feed_user_match.group(1)
                     if feed_pass_match:
                         credentials["password"] = feed_pass_match.group(1)
+        
+        elif source_type == "lab_config":
+            with open(source_path, 'r') as f:
+                content = f.read()
+                
+                # Look for OpenMRS connection properties
+                url_match = re.search(r'openmrs.auth\.uri\s*=\s*([^\s]+)', content)
+                user_match = re.search(r'openmrs.user\s*=\s*([^\s]+)', content)
+                pass_match = re.search(r'openmrs.password\s*=\s*([^\s]+)', content)
+
+            if url_match:
+                credentials["url"] = url_match.group(1)
+            if user_match:
+                credentials["username"] = user_match.group(1)
+            if pass_match:
+                credentials["password"] = pass_match.group(1)
+        
         
         elif source_type == "erp_connect":
             # JSON or properties format
@@ -183,15 +211,18 @@ def _test_credentials(credentials):
     feed_url = credentials["url"]
     if not feed_url.endswith('/atomfeed'):
         if feed_url.endswith('/openmrs'):
-            feed_url = f"{feed_url}/ws/atomfeed/patient/1"
+            feed_url = '{}/ws/atomfeed/patient/1'.format(feed_url)
         elif '/openmrs' in feed_url:
-            feed_url = f"{feed_url}/ws/atomfeed/patient/1"
+            feed_url = "{}/ws/atomfeed/patient/1".format(feed_url)
         else:
-            feed_url = f"{feed_url}/openmrs/ws/atomfeed/patient/1"
+            feed_url = "{}/openmrs/ws/atomfeed/patient/1".format(feed_url)
     
     try:
         # Parse URL to get host and port
-        from urllib.parse import urlparse
+        try:
+            from urllib.parse import urlparse
+        except ImportError:
+            from urlparse import urlparse
         parsed = urlparse(feed_url)
         host = parsed.hostname
         port = parsed.port or (443 if parsed.scheme == 'https' else 80)
@@ -199,7 +230,7 @@ def _test_credentials(credentials):
         
         # Create basic auth header
         import base64
-        auth_string = f"{credentials['username']}:{credentials['password']}"
+        auth_string = "{}:{}".format(credentials['username'],credentials['password'])
         auth_bytes = auth_string.encode('ascii')
         auth_b64 = base64.b64encode(auth_bytes).decode('ascii')
         
@@ -210,11 +241,11 @@ def _test_credentials(credentials):
         
         # Send HTTP request with basic auth
         request = (
-            f"GET {path} HTTP/1.1\r\n"
-            f"Host: {host}\r\n"
-            f"Authorization: Basic {auth_b64}\r\n"
-            f"User-Agent: CredentialTester/1.0\r\n"
-            f"Connection: close\r\n\r\n"
+            "GET {} HTTP/1.1\r\n".format(path) +
+            "Host: {}\r\n".format(host) +
+            "Authorization: Basic {}\r\n".format(auth_b64) +
+            "User-Agent: CredentialTester/1.0\r\n".format() +
+            "Connection: close\r\n\r\n".format()
         )
         
         sock.send(request.encode())
@@ -241,16 +272,16 @@ def _test_credentials(credentials):
             elif result["response_code"] == 404:
                 result["error"] = "Feed endpoint not found - check URL"
             else:
-                result["error"] = f"HTTP {result['response_code']}"
+                result["error"] = "HTTP {}".format(result['response_code'])
         else:
             result["error"] = "Invalid HTTP response"
             
     except socket.timeout:
         result["error"] = "Connection timeout - service may be down"
     except socket.error as e:
-        result["error"] = f"Socket error: {str(e)}"
+        result["error"] = "Socket error: {}".format(str(e))
     except Exception as e:
-        result["error"] = f"Unexpected error: {str(e)}"
+        result["error"] = "Unexpected error: {}".format(str(e))
     
     return result
 
@@ -266,13 +297,13 @@ def test_credentials_with_curl(credentials):
     
     feed_url = credentials["url"]
     if not feed_url.endswith('/atomfeed'):
-        feed_url = f"{feed_url}/openmrs/ws/atomfeed/patient/1"
+        feed_url = "{}/openmrs/ws/atomfeed/patient/1".format(feed_url)
     
     try:
         # Use curl with basic auth
         cmd = [
             "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
-            "-u", f"{credentials['username']}:{credentials['password']}",
+            "-u", "{}:{}".format(credentials['username'],credentials['password']),
             "--connect-timeout", "10",
             feed_url
         ]
@@ -285,7 +316,7 @@ def test_credentials_with_curl(credentials):
         elif result["response_code"] == 401:
             result["error"] = "Authentication failed"
         elif result["response_code"]:
-            result["error"] = f"HTTP {result['response_code']}"
+            result["error"] = "HTTP {}".format(result['response_code'])
         else:
             result["error"] = "Failed to connect"
             
@@ -306,18 +337,18 @@ if __name__ == "__main__":
     print("=" * 60)
     
     if result["credentials_found"]:
-        print(f"✓ Found {len(result['working_credentials'])} working credential set(s)")
+        print("✓ Found {} working credential set(s)".format(len(result['working_credentials'])))
         
         for cred in result["working_credentials"]:
-            print(f"\n  ✓ Working: {cred['source']}")
-            print(f"    → Response: HTTP {cred['test_result']['response_code']}")
+            print("\n  ✓ Working: {}".format(cred['source']))
+            print("    → Response: HTTP {}".format(cred['test_result']['response_code']))
         
         for cred in result["failed_credentials"]:
-            print(f"\n  ✗ Failed: {cred['source']}")
-            print(f"    → Error: {cred['error']}")
+            print("\n  ✗ Failed: {}".format(cred['source']))
+            print("    → Error: {}".format(cred['error']))
     else:
         print("✗ No credentials found in standard Bahmni config files")
     
     print("\nConfig files checked:")
     for source_path, details in result.get("details", {}).items():
-        print(f"  - {source_path}")
+        print("  - {}".format(source_path))

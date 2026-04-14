@@ -38,9 +38,9 @@ def check_atomfeed_tables(openmrs_url="http://localhost/openmrs", username="admi
     if results["tables"]["event_records"]["issues"]:
         results["issues"].extend(results["tables"]["event_records"]["issues"])
     if results["tables"]["failed_events"]["count"] > 0:
-        results["issues"].append(f"Found {results['tables']['failed_events']['count']} failed events")
+        results["issues"].append("Found {} failed events".format(results['tables']['failed_events']['count']))
     if results["entity_verification"]["invalid_count"] > 0:
-        results["issues"].append(f"Found {results['entity_verification']['invalid_count']} events pointing to non-existent entities")
+        results["issues"].append("Found {} events pointing to non-existent entities".format(results['entity_verification']['invalid_count']))
     
     results["total_invalid_events"] = results["entity_verification"]["invalid_count"]
     
@@ -58,19 +58,19 @@ def _check_event_records(db_user, db_pass):
     
     try:
         # Get total count
-        total_cmd = f'mysql -u{db_user} -p{db_pass} atomfeed -sN -e "SELECT COUNT(*) FROM event_records"'
+        total_cmd = 'mysql -u{} -p{} atomfeed -sN -e "SELECT COUNT(*) FROM event_records"'.format(db_user, db_pass)
         total_proc = subprocess.run(total_cmd, shell=True, capture_output=True, text=True, timeout=10)
         if total_proc.returncode == 0:
             result["count"] = int(total_proc.stdout.strip())
         
         # Get unprocessed events (events not yet consumed)
-        unprocessed_cmd = f'mysql -u{db_user} -p{db_pass} atomfeed -sN -e "SELECT COUNT(*) FROM event_records WHERE event_status = \'PENDING\'"'
+        unprocessed_cmd = 'mysql -u{} -p{} atomfeed -sN -e "SELECT COUNT(*) FROM event_records WHERE event_status = \'.format(db_user, db_pass)PENDING\'"'
         unprocessed_proc = subprocess.run(unprocessed_cmd, shell=True, capture_output=True, text=True, timeout=10)
         if unprocessed_proc.returncode == 0:
             result["unprocessed_count"] = int(unprocessed_proc.stdout.strip())
         
         # Get oldest unprocessed event
-        oldest_cmd = f'mysql -u{db_user} -p{db_pass} atomfeed -sN -e "SELECT MIN(time_created) FROM event_records WHERE event_status = \'PENDING\'"'
+        oldest_cmd = 'mysql -u{} -p{} atomfeed -sN -e "SELECT MIN(time_created) FROM event_records WHERE event_status = \'.format(db_user, db_pass)PENDING\'"'
         oldest_proc = subprocess.run(oldest_cmd, shell=True, capture_output=True, text=True, timeout=10)
         if oldest_proc.returncode == 0 and oldest_proc.stdout.strip():
             result["oldest_unprocessed"] = oldest_proc.stdout.strip()
@@ -78,17 +78,17 @@ def _check_event_records(db_user, db_pass):
             # Check if there are very old unprocessed events (> 1 hour)
             oldest_time = datetime.fromisoformat(result["oldest_unprocessed"].replace(' ', 'T'))
             if datetime.now() - oldest_time > timedelta(hours=1):
-                result["issues"].append(f"Unprocessed events from {result['oldest_unprocessed']} (> 1 hour old)")
+                result["issues"].append("Unprocessed events from {} (> 1 hour old)".format(result['oldest_unprocessed']))
         
         # Check for duplicate UUIDs
-        dup_cmd = f'mysql -u{db_user} -p{db_pass} atomfeed -sN -e "SELECT uuid, COUNT(*) FROM event_records GROUP BY uuid HAVING COUNT(*) > 1 LIMIT 5"'
+        dup_cmd = 'mysql -u{} -p{} atomfeed -sN -e "SELECT uuid, COUNT(*) FROM event_records GROUP BY uuid HAVING COUNT(*) > 1 LIMIT 5"'.format(db_user, db_pass)
         dup_proc = subprocess.run(dup_cmd, shell=True, capture_output=True, text=True, timeout=10)
         if dup_proc.returncode == 0 and dup_proc.stdout.strip():
             duplicates = dup_proc.stdout.strip().split('\n')
-            result["issues"].append(f"Found {len(duplicates)} duplicate UUIDs in event_records")
+            result["issues"].append("Found {} duplicate UUIDs in event_records".format(len(duplicates)))
         
     except Exception as e:
-        result["issues"].append(f"Error checking event_records: {str(e)}")
+        result["issues"].append("Error checking event_records: {}".format(str(e)))
     
     return result
 
@@ -101,7 +101,7 @@ def _check_markers(db_user, db_pass):
     }
     
     try:
-        cmd = f'mysql -u{db_user} -p{db_pass} atomfeed -sN -e "SELECT feed_uri, last_read_entry_id, last_read_entry_time FROM markers"'
+        cmd = 'mysql -u{} -p{} atomfeed -sN -e "SELECT feed_uri, last_read_entry_id, last_read_entry_time FROM markers"'.format(db_user, db_pass)
         proc = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=10)
         
         if proc.returncode == 0 and proc.stdout.strip():
@@ -119,7 +119,7 @@ def _check_markers(db_user, db_pass):
                     try:
                         last_time = datetime.fromisoformat(parts[2].replace(' ', 'T'))
                         if datetime.now() - last_time > timedelta(hours=24):
-                            result["issues"].append(f"Feed {parts[0]} not updated since {parts[2]}")
+                            result["issues"].append("Feed {} not updated since {}".format(parts[0], parts[2]))
                     except:
                         pass
         
@@ -127,7 +127,7 @@ def _check_markers(db_user, db_pass):
             result["issues"].append("No markers found - atomfeed may not be consuming events")
             
     except Exception as e:
-        result["issues"].append(f"Error checking markers: {str(e)}")
+        result["issues"].append("Error checking markers: {}".format(str(e)))
     
     return result
 
@@ -141,7 +141,7 @@ def _check_offset_marker(db_user, db_pass):
     }
     
     try:
-        cmd = f'mysql -u{db_user} -p{db_pass} atomfeed -sN -e "SELECT * FROM event_records_offset_marker LIMIT 1"'
+        cmd = 'mysql -u{} -p{} atomfeed -sN -e "SELECT * FROM event_records_offset_marker LIMIT 1"'.format(db_user, db_pass)
         proc = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=10)
         
         if proc.returncode == 0 and proc.stdout.strip():
@@ -151,7 +151,7 @@ def _check_offset_marker(db_user, db_pass):
             result["issues"].append("No offset marker found - may cause duplicate processing")
             
     except Exception as e:
-        result["issues"].append(f"Error checking offset_marker: {str(e)}")
+        result["issues"].append("Error checking offset_marker: {}".format(str(e)))
     
     return result
 
@@ -167,20 +167,20 @@ def _check_failed_events(db_user, db_pass):
     
     try:
         # Get total count
-        count_cmd = f'mysql -u{db_user} -p{db_pass} atomfeed -sN -e "SELECT COUNT(*) FROM failed_events"'
+        count_cmd = 'mysql -u{} -p{} atomfeed -sN -e "SELECT COUNT(*) FROM failed_events"'.format(db_user, db_pass)
         count_proc = subprocess.run(count_cmd, shell=True, capture_output=True, text=True, timeout=10)
         if count_proc.returncode == 0:
             result["count"] = int(count_proc.stdout.strip())
         
         if result["count"] > 0:
             # Get oldest failure
-            oldest_cmd = f'mysql -u{db_user} -p{db_pass} atomfeed -sN -e "SELECT MIN(time_created) FROM failed_events"'
+            oldest_cmd = 'mysql -u{} -p{} atomfeed -sN -e "SELECT MIN(time_created) FROM failed_events"'.format(db_user, db_pass)
             oldest_proc = subprocess.run(oldest_cmd, shell=True, capture_output=True, text=True, timeout=10)
             if oldest_proc.returncode == 0 and oldest_proc.stdout.strip():
                 result["oldest_failure"] = oldest_proc.stdout.strip()
             
             # Get recent failures (last 10)
-            recent_cmd = f'mysql -u{db_user} -p{db_pass} atomfeed -sN -e "SELECT id, uuid, title, error_message, time_created FROM failed_events ORDER BY time_created DESC LIMIT 10"'
+            recent_cmd = 'mysql -u{} -p{} atomfeed -sN -e "SELECT id, uuid, title, error_message, time_created FROM failed_events ORDER BY time_created DESC LIMIT 10"'.format(db_user, db_pass)
             recent_proc = subprocess.run(recent_cmd, shell=True, capture_output=True, text=True, timeout=10)
             if recent_proc.returncode == 0 and recent_proc.stdout.strip():
                 for line in recent_proc.stdout.strip().split('\n'):
@@ -194,10 +194,10 @@ def _check_failed_events(db_user, db_pass):
                             "time": parts[4]
                         })
             
-            result["issues"].append(f"Found {result['count']} failed events that need investigation")
+            result["issues"].append("Found {} failed events that need investigation".format(result['count']))
             
     except Exception as e:
-        result["issues"].append(f"Error checking failed_events: {str(e)}")
+        result["issues"].append("Error checking failed_events: {}".format(str(e)))
     
     return result
 
@@ -214,7 +214,7 @@ def _verify_entities(db_user, db_pass, openmrs_url):
     
     try:
         # Get recent unprocessed events to check
-        cmd = f'mysql -u{db_user} -p{db_pass} atomfeed -sN -e "SELECT id, uuid, title, url, content FROM event_records WHERE event_status = \'PENDING\' LIMIT 20"'
+        cmd = 'mysql -u{} -p{} atomfeed -sN -e "SELECT id, uuid, title, url, content FROM event_records WHERE event_status = \'.format(db_user, db_pass)PENDING\' LIMIT 20"'
         proc = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=10)
         
         if proc.returncode == 0 and proc.stdout.strip():
@@ -245,7 +245,7 @@ def _verify_entities(db_user, db_pass, openmrs_url):
                         })
         
         # Also check failed events
-        failed_cmd = f'mysql -u{db_user} -p{db_pass} atomfeed -sN -e "SELECT id, uuid, title, url, content FROM failed_events LIMIT 10"'
+        failed_cmd = 'mysql -u{} -p{} atomfeed -sN -e "SELECT id, uuid, title, url, content FROM failed_events LIMIT 10"'.format(db_user, db_pass)
         failed_proc = subprocess.run(failed_cmd, shell=True, capture_output=True, text=True, timeout=10)
         
         if failed_proc.returncode == 0 and failed_proc.stdout.strip():
@@ -271,7 +271,7 @@ def _verify_entities(db_user, db_pass, openmrs_url):
                         })
                         
     except Exception as e:
-        result["errors"].append(f"Error verifying entities: {str(e)}")
+        result["errors"].append("Error verifying entities: {}".format(str(e)))
     
     return result
 
@@ -295,11 +295,11 @@ def _check_entity_exists(base_url, entity_type, entity_uuid, content_url=None):
     
     # Try to extract URL from content if provided
     if content_url and content_url.startswith('/'):
-        full_url = f"{base_url}{content_url}"
+        full_url = "{}{}".format(base_url, content_url)
     else:
         # Construct REST URL
         endpoint = endpoint_mapping.get(entity_type, entity_type)
-        full_url = f"{base_url}/ws/rest/v1/{endpoint}/{entity_uuid}?v=full"
+        full_url = "{}/ws/rest/v1/{}/{}?v=full".format(base_url, endpoint, entity_uuid)
     
     try:
         # Parse URL
@@ -314,7 +314,7 @@ def _check_entity_exists(base_url, entity_type, entity_uuid, content_url=None):
         sock.connect((host, port))
         
         # Send request
-        request = f"GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
+        request = "GET {} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\n\r\n".format(path, host)
         sock.send(request.encode())
         
         # Read response
@@ -335,16 +335,16 @@ def _check_entity_exists(base_url, entity_type, entity_uuid, content_url=None):
             elif status_code == 401:
                 return False, status_code, "Authentication required"
             else:
-                return False, status_code, f"HTTP {status_code}"
+                return False, status_code, "HTTP {}".format(status_code)
         else:
             return False, None, "Invalid HTTP response"
             
     except socket.timeout:
         return False, None, "Connection timeout"
     except socket.error as e:
-        return False, None, f"Connection error: {str(e)}"
+        return False, None, "Connection error: {}".format(str(e))
     except Exception as e:
-        return False, None, f"Error: {str(e)}"
+        return False, None, "Error: {}".format(str(e))
 
 
 # Simple usage
@@ -363,48 +363,48 @@ if __name__ == "__main__":
     print("=" * 70)
     
     # Event Records
-    print(f"\n📊 event_records:")
+    print("\n📊 event_records:")
     er = result["tables"]["event_records"]
-    print(f"   Total events: {er['count']}")
-    print(f"   Unprocessed: {er['unprocessed_count']}")
+    print("   Total events: {}".format(er['count']))
+    print("   Unprocessed: {}".format(er['unprocessed_count']))
     if er['oldest_unprocessed']:
-        print(f"   Oldest unprocessed: {er['oldest_unprocessed']}")
+        print("   Oldest unprocessed: {}".format(er['oldest_unprocessed']))
     
     # Markers
-    print(f"\n📍 markers:")
+    print("\n📍 markers:")
     markers = result["tables"]["markers"]
     for marker in markers["feed_markers"]:
-        print(f"   Feed: {marker['feed_uri'][:50]}...")
-        print(f"   Last read: {marker['last_read_entry_time']}")
+        print("   Feed: {}...".format(marker['feed_uri'][:50]))
+        print("   Last read: {}".format(marker['last_read_entry_time']))
     
     # Failed Events
-    print(f"\n❌ failed_events:")
+    print("\n❌ failed_events:")
     fe = result["tables"]["failed_events"]
-    print(f"   Count: {fe['count']}")
+    print("   Count: {}".format(fe['count']))
     if fe['recent_failures']:
-        print(f"   Recent failures:")
+        print("   Recent failures:")
         for failure in fe['recent_failures'][:3]:
-            print(f"     - {failure['title']} ({failure['uuid']})")
-            print(f"       Error: {failure['error'][:50]}...")
+            print("     - {} ({})".format(failure['title'], failure['uuid']))
+            print("       Error: {}...".format(failure['error'][:50]))
     
     # Entity Verification
-    print(f"\n🔍 Entity Verification:")
+    print("\n🔍 Entity Verification:")
     ev = result["entity_verification"]
-    print(f"   Checked: {ev['total_checked']} events")
-    print(f"   Valid: {ev['valid_count']}")
-    print(f"   Invalid: {ev['invalid_count']}")
+    print("   Checked: {} events".format(ev['total_checked']))
+    print("   Valid: {}".format(ev['valid_count']))
+    print("   Invalid: {}".format(ev['invalid_count']))
     
     if ev['invalid_events']:
-        print(f"\n   ⚠️ Invalid events found:")
+        print("\n   ⚠️ Invalid events found:")
         for invalid in ev['invalid_events'][:5]:
-            print(f"     - {invalid['title']}: {invalid['uuid']}")
-            print(f"       Error: {invalid['error']}")
+            print("     - {}: {}".format(invalid['title'], invalid['uuid']))
+            print("       Error: {}".format(invalid['error']))
     
     # Summary
     print("\n" + "=" * 70)
     if result["issues"]:
-        print(f"⚠️ ISSUES FOUND ({len(result['issues'])}):")
+        print("⚠️ ISSUES FOUND ({}):".format(len(result['issues'])))
         for issue in result["issues"]:
-            print(f"   • {issue}")
+            print("   • {}".format(issue))
     else:
         print("✓ All tables look healthy!") 
