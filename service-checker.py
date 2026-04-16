@@ -78,6 +78,10 @@ def _check_service(service_name):
         
         stdout = subprocess.check_output(["systemctl", "is-active", service_name], stderr=subprocess.STDOUT).strip()
 
+        if stdout == "failed":
+            stdout2 = subprocess.check_output(["service", service_name, status], stderr=subprocess.STDOUT).strip()
+            if "is running" in stdout2:
+                stdout == "active"
 
         is_running = stdout.strip() == "active"
         
