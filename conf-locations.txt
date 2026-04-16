@@ -1,0 +1,5 @@
+erp-connect: /opt/bahmni-erp-connect/erp-connect.properties
+bahmni-lab: /opt/bahmni-lab/etc/atomfeed.properties
+openmrs: /opt/openmrs/bahmnicore.properties
+openmrs: /opt/openmrs/etc/atomfeed.properties
+
